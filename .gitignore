@@ -2,10 +2,13 @@
 # Git Ignore Rules - AI ChatBot Continuous Learning Pipeline
 # ==============================================================================
 
-# Credentials & Secret Keys
+# Credentials & Environment Files
 .env
 .env.*
-!.env.example
+.env*
+*.env
+*.env*
+.env.example
 *.pem
 *.key
 secrets.*
