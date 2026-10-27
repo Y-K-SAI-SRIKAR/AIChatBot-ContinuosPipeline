@@ -1,5 +1,13 @@
 """
 Integration tests for FastAPI endpoints and route handlers.
+Covers:
+- Health check
+- Chat endpoint and validation
+- Feedback collection with training eligibility rules
+- Unknown intent label rejection (HTTP 400)
+- Duplicate submission rejection / idempotency (HTTP 409)
+- Feedback stats endpoint without exposing PII
+- Metadata endpoints
 """
 
 import os
@@ -8,6 +16,7 @@ os.environ["ADK_OFFLINE_MODE"] = "true"
 from pathlib import Path
 import sys
 import pytest
+from fastapi import HTTPException
 from pydantic import ValidationError
 
 # Ensure ChatBot and repo root are on sys.path
@@ -21,6 +30,7 @@ from ADKBot.api import (
     home,
     chat,
     collect_feedback,
+    get_feedback_stats,
     get_active_prompt_metadata,
     get_active_model_metadata,
 )
@@ -66,10 +76,10 @@ class TestChatBotAPI:
 
     def test_feedback_endpoint_eligible_correction(self):
         # 1. Trigger a chat turn
-        chat_req = ChatRequest(message="Good morning")
+        chat_req = ChatRequest(message="Good morning unique test 1")
         chat_resp = run_coro(chat(chat_req))
 
-        # 2. Submit feedback with explicit corrected_intent
+        # 2. Submit feedback with valid corrected_intent
         fb_req = FeedbackRequest(
             request_id=chat_resp.request_id,
             rating=FeedbackRating.NEGATIVE,
@@ -84,7 +94,7 @@ class TestChatBotAPI:
         assert "Eligible" in fb_rec.eligibility_reason
 
     def test_feedback_endpoint_ineligible_negative_without_correction(self):
-        chat_req = ChatRequest(message="Tell me a joke")
+        chat_req = ChatRequest(message="Tell me a joke unique test 2")
         chat_resp = run_coro(chat(chat_req))
 
         fb_req = FeedbackRequest(
@@ -96,6 +106,47 @@ class TestChatBotAPI:
         assert fb_rec.training_eligibility is False
         assert "Ineligible" in fb_rec.eligibility_reason
 
+    def test_feedback_endpoint_rejects_unknown_intent(self):
+        chat_req = ChatRequest(message="What is the weather unique test 3")
+        chat_resp = run_coro(chat(chat_req))
+
+        # Attempt to correct with an unknown intent label
+        fb_req = FeedbackRequest(
+            request_id=chat_resp.request_id,
+            rating=FeedbackRating.NEGATIVE,
+            corrected_intent="CompletelyFakeNonExistentIntent"
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            run_coro(collect_feedback(fb_req))
+        assert exc_info.value.status_code == 400
+        assert "Unknown intent label" in exc_info.value.detail
+
+    def test_feedback_endpoint_rejects_duplicate_submission(self):
+        chat_req = ChatRequest(message="Hello there unique test 4")
+        chat_resp = run_coro(chat(chat_req))
+
+        fb_req = FeedbackRequest(
+            request_id=chat_resp.request_id,
+            rating=FeedbackRating.POSITIVE
+        )
+        # First submission succeeds
+        run_coro(collect_feedback(fb_req))
+
+        # Second submission for the same request_id must be rejected as duplicate (409)
+        with pytest.raises(HTTPException) as exc_info:
+            run_coro(collect_feedback(fb_req))
+        assert exc_info.value.status_code == 409
+        assert "Duplicate feedback" in exc_info.value.detail
+
+    def test_feedback_stats_endpoint(self):
+        stats = get_feedback_stats()
+        assert "total_feedback" in stats
+        assert "positive_ratings" in stats
+        assert "negative_ratings" in stats
+        assert "training_eligible" in stats
+        assert "drift_monitoring" in stats
+        assert isinstance(stats["total_feedback"], int)
+
     def test_metadata_endpoints(self):
         prompt_meta = get_active_prompt_metadata()
         assert prompt_meta.prompt_version == "v1.0.0"
@@ -104,4 +155,3 @@ class TestChatBotAPI:
         model_meta = get_active_model_metadata()
         assert model_meta.model_version == "v0.1.0-baseline"
         assert model_meta.num_classes == 22
-

@@ -52,7 +52,7 @@ class BERTIntentClassifier(nn.Module):
     ) -> None:
         super().__init__()
         _require_transformers()
-        from transformers import AutoModelForSequenceClassification
+        from transformers import AutoConfig, AutoModelForSequenceClassification
 
         self.model_name = model_name
         self.num_labels = num_labels
@@ -60,13 +60,25 @@ class BERTIntentClassifier(nn.Module):
         self.label2id = label2id
 
         try:
-            self.backbone = AutoModelForSequenceClassification.from_pretrained(
+            config = AutoConfig.from_pretrained(
                 model_name,
                 num_labels=num_labels,
                 id2label={int(k): v for k, v in id2label.items()},
                 label2id=label2id,
-                hidden_dropout_prob=dropout,
-                attention_probs_dropout_prob=dropout,
+            )
+            # Set dropout dynamically depending on model architecture
+            if hasattr(config, "dropout"):
+                config.dropout = dropout
+            if hasattr(config, "hidden_dropout_prob"):
+                config.hidden_dropout_prob = dropout
+            if hasattr(config, "attention_dropout"):
+                config.attention_dropout = dropout
+            if hasattr(config, "attention_probs_dropout_prob"):
+                config.attention_probs_dropout_prob = dropout
+
+            self.backbone = AutoModelForSequenceClassification.from_pretrained(
+                model_name,
+                config=config,
                 ignore_mismatched_sizes=True,
             )
         except OSError as exc:

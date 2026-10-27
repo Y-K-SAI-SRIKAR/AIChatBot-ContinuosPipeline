@@ -26,10 +26,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-# Ensure repo root on path
+# Ensure repo root and ChatBot-PipeLine are on sys.path
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+_PIPELINE_ROOT = _REPO_ROOT / "ChatBot-PipeLine"
+if str(_PIPELINE_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PIPELINE_ROOT))
 
 import torch
 import torch.nn as nn
@@ -208,6 +211,7 @@ def setup_mlflow(cfg: TrainingConfig):
         logger.warning("mlflow not installed — skipping experiment tracking.")
         return None, None
 
+    os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
     dagshub_owner = os.getenv("DAGSHUB_REPO_OWNER")
     dagshub_repo = os.getenv("DAGSHUB_REPO_NAME", "AIChatBot-ContinuosPipeline")
 

@@ -18,3 +18,27 @@ stages:
       - ChatBot-PipeLine/data/processed/dataset_summary.json
       - ChatBot-PipeLine/data/processed/dataset_report.md
 
+  train:
+    cmd: python ChatBot-PipeLine/pipelines/training_pipeline.py
+    deps:
+      - ChatBot-PipeLine/data/processed/train.json
+      - ChatBot-PipeLine/data/processed/val.json
+      - ChatBot-PipeLine/data/processed/test.json
+      - ChatBot-PipeLine/data/processed/label_mapping.json
+      - ChatBot-PipeLine/src/model/train.py
+      - ChatBot-PipeLine/src/model/model.py
+      - ChatBot-PipeLine/pipelines/training_pipeline.py
+    params:
+      - training.model_name
+      - training.num_labels
+      - training.batch_size
+      - training.learning_rate
+      - training.epochs
+      - training.max_length
+      - training.weight_decay
+    outs:
+      - artifacts/models/v0.1.0-baseline
+      - artifacts/models/baseline
+    metrics:
+      - artifacts/metrics/v0.1.0-baseline_test_metrics.json:
+          cache: false
