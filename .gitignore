@@ -1,0 +1,54 @@
+# ==============================================================================
+# Git Ignore Rules - AI ChatBot Continuous Learning Pipeline
+# ==============================================================================
+
+# Credentials & Secret Keys
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.*
+credentials.json
+
+# Python Bytecode & Caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual Environments
+env/
+venv/
+.venv/
+ENV/
+
+# Runtime Logs & Diagnostic Dumps
+*.log
+logs/
+.system_generated/
+*.log.*
+
+# MLflow Local Runs & Cache
+mlruns/
+.mlflow/
+
+# Generated Model Checkpoints & Large Artifacts (Versioned via DVC / MLflow)
+artifacts/models/*
+!artifacts/models/baseline/.gitkeep
+artifacts/metrics/*
+artifacts/cache/
+
+# Feedback Streaming Store (Active Run Data)
+ChatBot-PipeLine/data/feedback/*.jsonl
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+Desktop.ini
+

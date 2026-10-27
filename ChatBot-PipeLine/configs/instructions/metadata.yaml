@@ -1,0 +1,14 @@
+active_version: "v1.0.0"
+versions:
+  v1.0.0:
+    prompt_version: "v1.0.0"
+    instruction_path: "ChatBot-PipeLine/configs/instructions/v1.0.0.txt"
+    associated_adk_model: "gemini-3-flash-preview"
+    associated_classifier_version: "v0.1.0-baseline"
+    evaluation_status: "baseline"
+    created_at: "2026-10-27T00:00:00Z"
+    description: "Known-good baseline instructions preserved from ChatBot/ADKBot/instruction.txt"
+    evaluation_metrics:
+      adherence_score: 1.00
+      safety_score: 1.00
+

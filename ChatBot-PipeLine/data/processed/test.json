@@ -1,0 +1,134 @@
+[
+  {
+    "text": "Clever girl",
+    "intent": "Clever",
+    "label_id": 0,
+    "split": "test"
+  },
+  {
+    "text": "Thanks for the help, goodbye",
+    "intent": "CourtesyGoodBye",
+    "label_id": 1,
+    "split": "test"
+  },
+  {
+    "text": "How are you?",
+    "intent": "CourtesyGreeting",
+    "label_id": 2,
+    "split": "test"
+  },
+  {
+    "text": "Good thanks! It is Adam",
+    "intent": "CourtesyGreetingResponse",
+    "label_id": 3,
+    "split": "test"
+  },
+  {
+    "text": "Who are you talking to?",
+    "intent": "CurrentHumanQuery",
+    "label_id": 4,
+    "split": "test"
+  },
+  {
+    "text": "See you later",
+    "intent": "GoodBye",
+    "label_id": 5,
+    "split": "test"
+  },
+  {
+    "text": "Got any gossip",
+    "intent": "Gossip",
+    "label_id": 6,
+    "split": "test"
+  },
+  {
+    "text": "Hi",
+    "intent": "Greeting",
+    "label_id": 7,
+    "split": "test"
+  },
+  {
+    "text": "This is Adam",
+    "intent": "GreetingResponse",
+    "label_id": 8,
+    "split": "test"
+  },
+  {
+    "text": "Make me laugh",
+    "intent": "Jokes",
+    "label_id": 9,
+    "split": "test"
+  },
+  {
+    "text": "What can I call you?",
+    "intent": "NameQuery",
+    "label_id": 10,
+    "split": "test"
+  },
+  {
+    "text": "Not talking to you",
+    "intent": "NotTalking2U",
+    "label_id": 11,
+    "split": "test"
+  },
+  {
+    "text": "Can you open the pod bay door",
+    "intent": "PodBayDoor",
+    "label_id": 12,
+    "split": "test"
+  },
+  {
+    "text": "Well why not",
+    "intent": "PodBayDoorResponse",
+    "label_id": 13,
+    "split": "test"
+  },
+  {
+    "text": "What's your real name?",
+    "intent": "RealNameQuery",
+    "label_id": 14,
+    "split": "test"
+  },
+  {
+    "text": "prove you have a conscious",
+    "intent": "SelfAware",
+    "label_id": 15,
+    "split": "test"
+  },
+  {
+    "text": "Stop talking",
+    "intent": "Shutup",
+    "label_id": 16,
+    "split": "test"
+  },
+  {
+    "text": "shit",
+    "intent": "Swearing",
+    "label_id": 17,
+    "split": "test"
+  },
+  {
+    "text": "OK thanks",
+    "intent": "Thanks",
+    "label_id": 18,
+    "split": "test"
+  },
+  {
+    "text": "Tell me what time it is?",
+    "intent": "TimeQuery",
+    "label_id": 19,
+    "split": "test"
+  },
+  {
+    "text": "Do you understand me",
+    "intent": "UnderstandQuery",
+    "label_id": 20,
+    "split": "test"
+  },
+  {
+    "text": "Can you see me?",
+    "intent": "WhoAmI",
+    "label_id": 21,
+    "split": "test"
+  }
+]

@@ -1,0 +1,17 @@
+active_version: "v0.1.0-baseline"
+models:
+  v0.1.0-baseline:
+    model_version: "v0.1.0-baseline"
+    model_name: "bert-intent-classifier"
+    artifact_location: "artifacts/models/baseline"
+    dataset_version: "ChatBot-PipeLine/data/raw/Intent.json"
+    dvc_revision: "baseline-dvc-v1"
+    num_classes: 22
+    promotion_status: "production"
+    created_at: "2026-10-27T00:00:00Z"
+    evaluation_metrics:
+      macro_f1: 0.88
+      accuracy: 0.91
+      latency_p95_ms: 22.5
+    notes: "Baseline BERT sequence classifier trained on Intent.json (22 classes)"
+

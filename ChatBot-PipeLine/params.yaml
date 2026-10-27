@@ -1,0 +1,21 @@
+preprocessing:
+  raw_data_path: "ChatBot-PipeLine/data/raw/Intent.json"
+  processed_dir: "ChatBot-PipeLine/data/processed"
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+  random_seed: 42
+
+training:
+  model_name: "distilbert-base-uncased"
+  num_labels: 22
+  batch_size: 16
+  learning_rate: 3e-5
+  epochs: 4
+  max_length: 64
+  weight_decay: 0.01
+
+evaluation:
+  min_macro_f1: 0.80
+  min_accuracy: 0.85
+

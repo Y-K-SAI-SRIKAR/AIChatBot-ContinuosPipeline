@@ -1,0 +1,20 @@
+stages:
+  clean_data:
+    cmd: python ChatBot-PipeLine/src/preprocessing/clean_data.py --input ChatBot-PipeLine/data/raw/Intent.json --output-dir ChatBot-PipeLine/data/processed --train-ratio 0.70 --val-ratio 0.15 --test-ratio 0.15 --seed 42
+    deps:
+      - ChatBot-PipeLine/data/raw/Intent.json
+      - ChatBot-PipeLine/src/preprocessing/clean_data.py
+    params:
+      - preprocessing.train_ratio
+      - preprocessing.val_ratio
+      - preprocessing.test_ratio
+      - preprocessing.random_seed
+    outs:
+      - ChatBot-PipeLine/data/processed/train.json
+      - ChatBot-PipeLine/data/processed/val.json
+      - ChatBot-PipeLine/data/processed/test.json
+      - ChatBot-PipeLine/data/processed/training_data.json
+      - ChatBot-PipeLine/data/processed/label_mapping.json
+      - ChatBot-PipeLine/data/processed/dataset_summary.json
+      - ChatBot-PipeLine/data/processed/dataset_report.md
+
