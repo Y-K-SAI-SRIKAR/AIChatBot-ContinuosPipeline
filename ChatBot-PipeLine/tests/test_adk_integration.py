@@ -3,9 +3,7 @@ Integration tests for Google ADK Agent integration with BERT intent classificati
 versioned instruction resolution, atomic reloads, confidence thresholding,
 and fallback behaviors.
 """
-
 from __future__ import annotations
-
 import os
 os.environ["ADK_OFFLINE_MODE"] = "true"
 
@@ -20,7 +18,9 @@ if str(REPO_ROOT) not in sys.path:
 if str(REPO_ROOT / "ChatBot") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "ChatBot"))
 
+# pyrefly: ignore[missing-import]
 from ADKBot.agent import agent_manager, root_agent
+# pyrefly: ignore[missing-import]
 from ADKBot.api import chat, reload_configuration
 from common.contracts import ChatRequest
 
