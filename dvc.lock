@@ -1,0 +1,107 @@
+schema: '2.0'
+stages:
+  clean_data:
+    cmd: python ChatBot-PipeLine/src/preprocessing/clean_data.py --input 
+      ChatBot-PipeLine/data/raw/Intent.json --output-dir 
+      ChatBot-PipeLine/data/processed --train-ratio 0.70 --val-ratio 0.15 
+      --test-ratio 0.15 --seed 42
+    deps:
+    - path: ChatBot-PipeLine/data/raw/Intent.json
+      hash: md5
+      md5: 30476b4ef881aec0c26eccb422414e6e
+      size: 69866
+    - path: ChatBot-PipeLine/src/preprocessing/clean_data.py
+      hash: md5
+      md5: 441dfa5eb885e215696d8926cb15a01e
+      size: 24976
+    params:
+      params.yaml:
+        preprocessing.random_seed: 42
+        preprocessing.test_ratio: 0.15
+        preprocessing.train_ratio: 0.7
+        preprocessing.val_ratio: 0.15
+    outs:
+    - path: ChatBot-PipeLine/data/processed/label_mapping.json
+      hash: md5
+      md5: 3525728e4837b4f961c1d2b862186779
+      size: 1607
+    - path: ChatBot-PipeLine/data/processed/test.json
+      hash: md5
+      md5: 693e638b30d8365ca24d3f29bfe16775
+      size: 2554
+    - path: ChatBot-PipeLine/data/processed/train.json
+      hash: md5
+      md5: 2a14b8ce2f94c0a69aa43f8389ac7ef6
+      size: 11746
+    - path: ChatBot-PipeLine/data/processed/training_data.json
+      hash: md5
+      md5: 6c09d8a2ee54b8b136bfe462c827d7c1
+      size: 16831
+    - path: ChatBot-PipeLine/data/processed/val.json
+      hash: md5
+      md5: 2038ed2572910990568dab07612c8e63
+      size: 2537
+  train:
+    cmd: python ChatBot-PipeLine/src/model/train.py --processed-dir 
+      ChatBot-PipeLine/data/processed --artifact-dir artifacts/models 
+      --model-version v0.1.0-baseline
+    deps:
+    - path: ChatBot-PipeLine/data/processed/label_mapping.json
+      hash: md5
+      md5: 3525728e4837b4f961c1d2b862186779
+      size: 1607
+    - path: ChatBot-PipeLine/data/processed/train.json
+      hash: md5
+      md5: 2a14b8ce2f94c0a69aa43f8389ac7ef6
+      size: 11746
+    - path: ChatBot-PipeLine/data/processed/val.json
+      hash: md5
+      md5: 2038ed2572910990568dab07612c8e63
+      size: 2537
+    - path: ChatBot-PipeLine/src/model/model.py
+      hash: md5
+      md5: 88d957662fdd3fed2d371685a7bdfd8e
+      size: 5877
+    - path: ChatBot-PipeLine/src/model/train.py
+      hash: md5
+      md5: 6fa790b4180490d49894ff00da815e62
+      size: 23834
+    params:
+      params.yaml:
+        training.batch_size: 16
+        training.epochs: 4
+        training.learning_rate: 3e-05
+        training.max_length: 64
+        training.model_name: distilbert-base-uncased
+        training.num_labels: 22
+        training.weight_decay: 0.01
+    outs:
+    - path: artifacts/models/v0.1.0-baseline
+      hash: md5
+      md5: 2695f86b7f93faf7972b9bfd88f4b485.dir
+      size: 268611282
+      nfiles: 7
+  evaluate:
+    cmd: python ChatBot-PipeLine/src/evaluation/evaluate.py --model-dir 
+      artifacts/models/v0.1.0-baseline --test-data 
+      ChatBot-PipeLine/data/processed/test.json --output-metrics 
+      artifacts/metrics/v0.1.0-baseline_test_metrics.json
+    deps:
+    - path: ChatBot-PipeLine/data/processed/test.json
+      hash: md5
+      md5: 693e638b30d8365ca24d3f29bfe16775
+      size: 2554
+    - path: ChatBot-PipeLine/src/evaluation/evaluate.py
+      hash: md5
+      md5: bf41bf7bf519b83e87e8d2c5aac02c22
+      size: 6893
+    - path: artifacts/models/v0.1.0-baseline
+      hash: md5
+      md5: 2695f86b7f93faf7972b9bfd88f4b485.dir
+      size: 268611282
+      nfiles: 7
+    outs:
+    - path: artifacts/metrics/v0.1.0-baseline_test_metrics.json
+      hash: md5
+      md5: f053335afdd2efe852949b1c0f6a63a4
+      size: 9140

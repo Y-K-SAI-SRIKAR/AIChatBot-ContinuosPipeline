@@ -1,0 +1,5 @@
+outs:
+- md5: 30476b4ef881aec0c26eccb422414e6e
+  size: 69866
+  hash: md5
+  path: Intent.json

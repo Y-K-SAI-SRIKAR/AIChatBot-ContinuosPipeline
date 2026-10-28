@@ -1,0 +1,47 @@
+stages:
+  clean_data:
+    cmd: python ChatBot-PipeLine/src/preprocessing/clean_data.py --input ChatBot-PipeLine/data/raw/Intent.json --output-dir ChatBot-PipeLine/data/processed --train-ratio 0.70 --val-ratio 0.15 --test-ratio 0.15 --seed 42
+    deps:
+      - ChatBot-PipeLine/data/raw/Intent.json
+      - ChatBot-PipeLine/src/preprocessing/clean_data.py
+    params:
+      - preprocessing.train_ratio
+      - preprocessing.val_ratio
+      - preprocessing.test_ratio
+      - preprocessing.random_seed
+    outs:
+      - ChatBot-PipeLine/data/processed/train.json
+      - ChatBot-PipeLine/data/processed/val.json
+      - ChatBot-PipeLine/data/processed/test.json
+      - ChatBot-PipeLine/data/processed/label_mapping.json
+      - ChatBot-PipeLine/data/processed/training_data.json
+
+  train:
+    cmd: python ChatBot-PipeLine/src/model/train.py --processed-dir ChatBot-PipeLine/data/processed --artifact-dir artifacts/models --model-version v0.1.0-baseline
+    deps:
+      - ChatBot-PipeLine/data/processed/train.json
+      - ChatBot-PipeLine/data/processed/val.json
+      - ChatBot-PipeLine/data/processed/label_mapping.json
+      - ChatBot-PipeLine/src/model/train.py
+      - ChatBot-PipeLine/src/model/model.py
+    params:
+      - training.model_name
+      - training.num_labels
+      - training.batch_size
+      - training.learning_rate
+      - training.epochs
+      - training.max_length
+      - training.weight_decay
+    outs:
+      - artifacts/models/v0.1.0-baseline
+
+  evaluate:
+    cmd: python ChatBot-PipeLine/src/evaluation/evaluate.py --model-dir artifacts/models/v0.1.0-baseline --test-data ChatBot-PipeLine/data/processed/test.json --output-metrics artifacts/metrics/v0.1.0-baseline_test_metrics.json
+    deps:
+      - artifacts/models/v0.1.0-baseline
+      - ChatBot-PipeLine/data/processed/test.json
+      - ChatBot-PipeLine/src/evaluation/evaluate.py
+    metrics:
+      - artifacts/metrics/v0.1.0-baseline_test_metrics.json:
+          cache: false
+

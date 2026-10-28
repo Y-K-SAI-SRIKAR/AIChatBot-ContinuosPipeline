@@ -47,6 +47,9 @@ artifacts/models/*
 artifacts/metrics/*
 artifacts/cache/
 
+# Processed Dataset (Versioned via DVC)
+ChatBot-PipeLine/data/processed/
+
 # Feedback Streaming Store (Active Run Data)
 ChatBot-PipeLine/data/feedback/*.jsonl
 

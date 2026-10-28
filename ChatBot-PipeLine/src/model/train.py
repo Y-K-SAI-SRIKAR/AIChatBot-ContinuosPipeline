@@ -7,7 +7,7 @@ This script:
   3. Evaluates on val set each epoch (with early stopping).
   4. Runs final evaluation on the held-out test set.
   5. Saves model + tokenizer + label mapping to a versioned artifact dir.
-  6. Logs all params, metrics and artifacts to MLflow (local or DagsHub).
+  6. Logs all params, metrics, lineage tags, and artifacts to MLflow (local or DagsHub).
 
 The Google ADK Agent is NEVER modified.
 """
@@ -15,10 +15,12 @@ The Google ADK Agent is NEVER modified.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import os
 import random
+import subprocess
 import sys
 import time
 from dataclasses import asdict, dataclass, field
@@ -26,13 +28,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-# Ensure repo root and ChatBot-PipeLine are on sys.path
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
+# Ensure repo root and pipeline root on path
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
 _PIPELINE_ROOT = _REPO_ROOT / "ChatBot-PipeLine"
-if str(_PIPELINE_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PIPELINE_ROOT))
+for p in [_REPO_ROOT, _PIPELINE_ROOT]:
+    if str(p) not in sys.path:
+        sys.path.insert(0, str(p))
 
 import torch
 import torch.nn as nn
@@ -58,7 +64,7 @@ class TrainingConfig:
     num_labels: int = 22
     batch_size: int = 16
     learning_rate: float = 3e-5
-    epochs: int = 5
+    epochs: int = 4
     max_length: int = 64
     weight_decay: float = 0.01
     dropout: float = 0.1
@@ -80,6 +86,28 @@ def set_seeds(seed: int) -> None:
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
     logger.info(f"All random seeds set to {seed}")
+
+
+def get_git_commit() -> str:
+    """Safely retrieve current Git commit hash."""
+    try:
+        commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(_REPO_ROOT),
+            stderr=subprocess.DEVNULL
+        ).decode("utf-8").strip()
+        return commit
+    except Exception:
+        return "uncommitted"
+
+
+def compute_file_hash(path: Path) -> str:
+    """Compute MD5 hash of a file for lineage tracing."""
+    if not path.exists():
+        return "missing"
+    h = hashlib.md5()
+    h.update(path.read_bytes())
+    return h.hexdigest()
 
 
 def load_split(split_path: Path) -> Tuple[List[str], List[int]]:
@@ -202,8 +230,11 @@ def eval_one_epoch(
 # ─────────────────────────────────────────────────────────────────────────────
 def setup_mlflow(cfg: TrainingConfig):
     """
-    Configure MLflow. Uses DagsHub remote if DAGSHUB_REPO_OWNER is set;
-    otherwise falls back to local tracking URI.
+    Configure MLflow.
+    Precedence:
+    1. Direct MLFLOW_TRACKING_URI environment variable (e.g. DagsHub URI).
+    2. DAGSHUB_REPO_OWNER via dagshub client.
+    3. Local tracking URI in ChatBot-PipeLine/mlruns.
     """
     try:
         import mlflow
@@ -212,17 +243,27 @@ def setup_mlflow(cfg: TrainingConfig):
         return None, None
 
     os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
+    env_tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
     dagshub_owner = os.getenv("DAGSHUB_REPO_OWNER")
     dagshub_repo = os.getenv("DAGSHUB_REPO_NAME", "AIChatBot-ContinuosPipeline")
 
-    if dagshub_owner:
+    if env_tracking_uri and "dagshub.com" in env_tracking_uri:
+        mlflow.set_tracking_uri(env_tracking_uri)
+        logger.info(f"MLflow tracking connected to remote URI: {env_tracking_uri}")
+    elif dagshub_owner:
         try:
             import dagshub
             dagshub.init(repo_owner=dagshub_owner, repo_name=dagshub_repo, mlflow=True)
-            logger.info(f"DagsHub MLflow tracking enabled for {dagshub_owner}/{dagshub_repo}")
+            logger.info(f"DagsHub MLflow tracking initialized for {dagshub_owner}/{dagshub_repo}")
         except Exception as e:
-            logger.warning(f"DagsHub init failed ({e}); falling back to local tracking.")
-            mlflow.set_tracking_uri(cfg.mlflow_tracking_uri)
+            logger.warning(f"DagsHub init failed ({e}); using direct URI or local fallback.")
+            if env_tracking_uri:
+                mlflow.set_tracking_uri(env_tracking_uri)
+            else:
+                mlflow.set_tracking_uri(cfg.mlflow_tracking_uri)
+    elif env_tracking_uri:
+        mlflow.set_tracking_uri(env_tracking_uri)
+        logger.info(f"MLflow tracking connected to: {env_tracking_uri}")
     else:
         local_uri = Path(_REPO_ROOT) / cfg.mlflow_tracking_uri
         local_uri.mkdir(parents=True, exist_ok=True)
@@ -311,6 +352,7 @@ def run_training(cfg: TrainingConfig) -> Dict:
     # ── MLflow ───────────────────────────────────────────────────────────────
     mlflow, run = setup_mlflow(cfg)
     if mlflow and run:
+        raw_data_path = _REPO_ROOT / "ChatBot-PipeLine" / "data" / "raw" / "Intent.json"
         mlflow.log_params(
             {
                 "model_name": cfg.model_name,
@@ -325,6 +367,19 @@ def run_training(cfg: TrainingConfig) -> Dict:
                 "train_samples": len(train_texts),
                 "val_samples": len(val_texts),
                 "test_samples": len(test_texts),
+            }
+        )
+        mlflow.set_tags(
+            {
+                "git_commit": get_git_commit(),
+                "dataset_version": "ChatBot-PipeLine/data/raw/Intent.json",
+                "raw_dataset_hash": compute_file_hash(raw_data_path),
+                "train_split_hash": compute_file_hash(processed_dir / "train.json"),
+                "val_split_hash": compute_file_hash(processed_dir / "val.json"),
+                "test_split_hash": compute_file_hash(processed_dir / "test.json"),
+                "dvc_tracked": "true",
+                "framework": "transformers",
+                "model_version": cfg.model_version,
             }
         )
 
@@ -447,6 +502,7 @@ def run_training(cfg: TrainingConfig) -> Dict:
         "num_classes": cfg.num_labels,
         "artifact_dir": str(artifact_dir),
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "git_commit": get_git_commit(),
         "training_config": {
             k: str(v) if isinstance(v, Path) else v
             for k, v in asdict(cfg).items()
@@ -462,8 +518,22 @@ def run_training(cfg: TrainingConfig) -> Dict:
         json.dump(model_card, f, indent=2)
 
     if mlflow and run:
-        mlflow.log_artifacts(str(artifact_dir), artifact_path="model")
-        mlflow.end_run()
+        # Log metadata artifacts to MLflow (heavy model weights are tracked via DVC)
+        for meta_file in [
+            artifact_dir / "model_card.json",
+            artifact_dir / "label_mapping.json",
+            artifact_dir / "training_history.json",
+            metrics_dir / f"{cfg.model_version}_test_metrics.json",
+        ]:
+            if meta_file.exists():
+                try:
+                    mlflow.log_artifact(str(meta_file), artifact_path="metadata")
+                except Exception as e:
+                    logger.warning("Could not log artifact %s: %s", meta_file.name, e)
+        try:
+            mlflow.end_run()
+        except Exception as e:
+            logger.warning(f"Note on ending MLflow run: {e}")
         logger.info(f"MLflow run complete. Run ID: {run.info.run_id}")
 
     logger.info(f"All artifacts saved to: {artifact_dir}")
@@ -480,7 +550,7 @@ def run_training(cfg: TrainingConfig) -> Dict:
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Train BERT intent classifier")
     p.add_argument("--model-name", default="distilbert-base-uncased")
-    p.add_argument("--epochs", type=int, default=5)
+    p.add_argument("--epochs", type=int, default=4)
     p.add_argument("--batch-size", type=int, default=16)
     p.add_argument("--lr", type=float, default=3e-5)
     p.add_argument("--max-length", type=int, default=64)
@@ -519,4 +589,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

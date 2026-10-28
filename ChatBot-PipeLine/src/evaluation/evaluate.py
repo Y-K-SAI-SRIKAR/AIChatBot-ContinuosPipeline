@@ -1,5 +1,5 @@
 """
-evaluate.py — Evaluation utilities used by both training and retraining pipelines.
+evaluate.py — Evaluation utilities and CLI entry point for intent classification.
 
 Computes accuracy, macro P/R/F1, per-class metrics, and confusion matrix.
 Results are written to JSON for MLflow logging and DVC metrics comparison.
@@ -7,14 +7,34 @@ Results are written to JSON for MLflow logging and DVC metrics comparison.
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 from pathlib import Path
+import sys
 from typing import Dict, List, Optional, Tuple
 
-import torch
-from torch.utils.data import DataLoader
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
 
+import torch
+
+# Ensure repo root is on sys.path
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+_PIPELINE_ROOT = _REPO_ROOT / "ChatBot-PipeLine"
+if str(_PIPELINE_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PIPELINE_ROOT))
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
 logger = logging.getLogger("model.evaluate")
 
 
@@ -26,7 +46,7 @@ def _require_sklearn() -> None:
 
 
 def evaluate_model(
-    model: "BERTIntentClassifier",  # noqa: F821 – forward ref
+    model: "BERTIntentClassifier",  # noqa: F821
     tokenizer,
     texts: List[str],
     true_labels: List[int],
@@ -40,9 +60,9 @@ def evaluate_model(
 
     WARNING — Dataset size limitation
     ----------------------------------
-    This project trains on 142 unique utterances (22 classes × ~6 each).
+    This project trains on 142 unique utterances (22 classes x ~6 each).
     With only 1 sample per class in the test split, per-class precision/recall
-    is either 0 or 1 (no interpolation possible).  Macro-averaged scores
+    is either 0 or 1 (no interpolation possible). Macro-averaged scores
     should be interpreted as orientation estimates, not production benchmarks.
     """
     _require_sklearn()
@@ -131,3 +151,54 @@ def save_metrics(metrics: Dict, output_path: Path) -> None:
         json.dump(metrics, f, indent=2)
     logger.info(f"Metrics saved to {output_path}")
 
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Evaluate trained BERT intent classifier on test split")
+    parser.add_argument("--model-dir", type=Path, default=Path("artifacts/models/v0.1.0-baseline"), help="Path to model checkpoint")
+    parser.add_argument("--test-data", type=Path, default=Path("ChatBot-PipeLine/data/processed/test.json"), help="Path to test.json")
+    parser.add_argument("--output-metrics", type=Path, default=Path("artifacts/metrics/v0.1.0-baseline_test_metrics.json"), help="Output metrics path")
+    parser.add_argument("--max-length", type=int, default=64, help="Max sequence length")
+
+    args = parser.parse_args()
+
+    model_dir = Path(args.model_dir)
+    test_path = Path(args.test_data)
+    output_path = Path(args.output_metrics)
+
+    if not model_dir.exists():
+        raise FileNotFoundError(f"Model directory not found at: {model_dir}")
+    if not test_path.exists():
+        raise FileNotFoundError(f"Test data not found at: {test_path}")
+
+    from transformers import AutoTokenizer
+    from src.model.model import BERTIntentClassifier
+
+    logger.info(f"Loading model from {model_dir}...")
+    model = BERTIntentClassifier.from_pretrained(model_dir)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+
+    tokenizer = AutoTokenizer.from_pretrained(model_dir)
+
+    with open(test_path, "r", encoding="utf-8") as f:
+        test_examples = json.load(f)
+
+    texts = [e["text"] for e in test_examples]
+    true_labels = [e["label_id"] for e in test_examples]
+
+    metrics = evaluate_model(
+        model=model,
+        tokenizer=tokenizer,
+        texts=texts,
+        true_labels=true_labels,
+        id2label=model.id2label,
+        max_length=args.max_length,
+        device=device,
+    )
+
+    save_metrics(metrics, output_path)
+    logger.info(f"Held-out test evaluation completed. Metrics saved to {output_path}")
+
+
+if __name__ == "__main__":
+    main()
