@@ -1,0 +1,84 @@
+name: Continuous Learning & Model Retraining
+
+on:
+  schedule:
+    # Run every Sunday at midnight UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      min_feedback:
+        description: 'Minimum new verified feedback records required to retrain'
+        required: true
+        default: '10'
+        type: string
+      force_promote:
+        description: 'Force candidate promotion (bypass automated metric improvement check)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: continuous-retraining-pipeline
+  cancel-in-progress: false
+
+jobs:
+  retrain-and-evaluate:
+    name: Execute 14-Stage Retraining Pipeline
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+
+      - name: Run Retraining Pipeline
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          METRICS_AUTH_TOKEN: ${{ secrets.METRICS_AUTH_TOKEN }}
+          ADK_OFFLINE_MODE: "true"
+          DO_NOT_TRACK: "1"
+          EVIDENTLY_DISABLE_TELEMETRY: "1"
+          MLFLOW_ALLOW_FILE_STORE: "true"
+        run: |
+          FORCE_ARG=""
+          if [ "${{ inputs.force_promote }}" = "true" ]; then
+            FORCE_ARG="--force-promote"
+          fi
+          MIN_FB="${{ inputs.min_feedback }}"
+          if [ -z "$MIN_FB" ]; then
+            MIN_FB="10"
+          fi
+
+          echo "Executing continuous retraining pipeline (min_feedback=$MIN_FB, force_promote=${{ inputs.force_promote }})..."
+          python ChatBot-PipeLine/src/pipeline/retraining_pipeline.py \
+            --min-feedback "$MIN_FB" \
+            $FORCE_ARG
+
+      - name: Archive Evidently Reports & Evaluation Metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retraining-artifacts-${{ github.run_id }}
+          path: |
+            artifacts/reports/evidently/
+            artifacts/metrics/
+          retention-days: 14
+
+      - name: Publish Promoted Model Pointer
+        if: success() && github.ref == 'refs/heads/main'
+        run: |
+          echo "Model evaluation and promotion gates passed. Active model and instruction metadata updated."
+

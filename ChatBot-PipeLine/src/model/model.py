@@ -141,7 +141,7 @@ class BERTIntentClassifier(nn.Module):
 
         id2label = {int(k): v for k, v in mapping["id2label"].items()}
         label2id = mapping["label2id"]
-        num_labels = mapping["num_classes"]
+        num_labels = mapping.get("num_classes", len(label2id))
         model_name = mapping.get("model_name", "distilbert-base-uncased")
 
         instance = cls.__new__(cls)

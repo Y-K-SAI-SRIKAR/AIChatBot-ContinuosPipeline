@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  chatbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aichatbot-api:latest
+    container_name: aichatbot-api
+    restart: unless-stopped
+    ports:
+      - "6655:6655"
+    environment:
+      - PORT=6655
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - METRICS_AUTH_TOKEN=${METRICS_AUTH_TOKEN:-}
+      - ADK_OFFLINE_MODE=${ADK_OFFLINE_MODE:-false}
+    volumes:
+      - feedback_data:/app/ChatBot-PipeLine/data/feedback
+      - model_artifacts:/app/artifacts/models
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6655/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  prometheus:
+    image: prom/prometheus:v2.50.0
+    container_name: aichatbot-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    depends_on:
+      chatbot:
+        condition: service_healthy
+
+volumes:
+  feedback_data:
+  model_artifacts:
+  prometheus_data:
+

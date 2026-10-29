@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 import sys
-from threading import Lock
+from threading import RLock
 from typing import Dict, Optional, Tuple
 
 # Ensure repository root is on sys.path for common imports
@@ -55,7 +55,7 @@ class ADKAgentManager:
     def __init__(self, session_service: Optional[InMemorySessionService] = None):
         self.session_service = session_service or shared_session_service
         self.prompt_resolver = PromptConfigResolver()
-        self._lock = Lock()
+        self._lock = RLock()
         self._agents: Dict[str, Agent] = {}
         self._runners: Dict[str, Runner] = {}
         self._active_version: Optional[str] = None
@@ -68,8 +68,9 @@ class ADKAgentManager:
         with self._lock:
             if prompt_version not in self._agents:
                 logger.info(f"Instantiating new ADK Agent for prompt version: {prompt_version}")
+                sanitized_version = prompt_version.replace("-", "_").replace(".", "_")
                 agent = Agent(
-                    name=f"ChatBot-{prompt_version}",
+                    name=f"ChatBot_{sanitized_version}",
                     description="AI ChatBot Agent with versioned instructions",
                     instruction=instruction_text,
                     model=self.DEFAULT_MODEL_NAME,

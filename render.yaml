@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: aichatbot-api
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: standard
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: PORT
+        value: 6655
+      - key: GEMINI_API_KEY
+        sync: false # Set securely in Render dashboard
+      - key: METRICS_AUTH_TOKEN
+        sync: false # Set securely in Render dashboard
+      - key: ADK_OFFLINE_MODE
+        value: "false"
+      - key: DO_NOT_TRACK
+        value: "1"
+      - key: EVIDENTLY_DISABLE_TELEMETRY
+        value: "1"
+      - key: MLFLOW_ALLOW_FILE_STORE
+        value: "true"
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: FEEDBACK_STORAGE_PATH
+        value: /var/data/feedback/user_feedback.jsonl
+    disk:
+      name: feedback-storage
+      mountPath: /var/data/feedback
+      sizeGB: 1
+

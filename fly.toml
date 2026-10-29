@@ -1,0 +1,39 @@
+# Fly.io application deployment configuration
+app = "aichatbot-api"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "6655"
+  ADK_OFFLINE_MODE = "false"
+  DO_NOT_TRACK = "1"
+  EVIDENTLY_DISABLE_TELEMETRY = "1"
+  MLFLOW_ALLOW_FILE_STORE = "true"
+  FEEDBACK_STORAGE_PATH = "/mnt/feedback/user_feedback.jsonl"
+  ALLOWED_ORIGINS = "*"
+
+[http_service]
+  internal_port = 6655
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 250
+    soft_limit = 200
+
+[[http_service.checks]]
+  grace_period = "15s"
+  interval = "30s"
+  method = "GET"
+  timeout = "5s"
+  path = "/health"
+
+[[mounts]]
+  source = "chatbot_feedback_data"
+  destination = "/mnt/feedback"
+

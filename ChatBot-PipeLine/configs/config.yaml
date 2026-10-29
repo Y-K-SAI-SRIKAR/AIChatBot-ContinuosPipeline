@@ -1,34 +1,28 @@
 app:
-  name: "AI ChatBot Continuous Learning"
-  environment: "development"
-  host: "0.0.0.0"
+  environment: development
+  host: 0.0.0.0
+  name: AI ChatBot Continuous Learning
   port: 6655
-
-prompt_management:
-  active_version: "v1.0.0"
-  instructions_dir: "ChatBot-PipeLine/configs/instructions"
-  fallback_instruction_file: "ChatBot/ADKBot/instruction.txt"
-
-model_management:
-  active_version: "v0.1.0-baseline"
-  base_architecture: "distilbert-base-uncased"
-  models_dir: "artifacts/models"
-  fallback_model_dir: "artifacts/models/baseline"
-  num_labels: 22
-
-paths:
-  raw_intent_data: "ChatBot-PipeLine/data/raw/Intent.json"
-  processed_data_dir: "ChatBot-PipeLine/data/processed"
-  feedback_data_dir: "ChatBot-PipeLine/data/feedback"
-  feedback_records_file: "ChatBot-PipeLine/data/feedback/user_feedback.jsonl"
-  metrics_output_dir: "artifacts/metrics"
-
 mlflow:
-  experiment_name: "aic-chatbot-continuous-learning"
-  tracking_uri: "mlruns"
-
+  experiment_name: aic-chatbot-continuous-learning
+  tracking_uri: mlruns
+model_management:
+  active_version: v0.1.0-baseline
+  base_architecture: distilbert-base-uncased
+  fallback_model_dir: artifacts/models/baseline
+  models_dir: artifacts/models
+  num_labels: 22
+paths:
+  feedback_data_dir: ChatBot-PipeLine/data/feedback
+  feedback_records_file: ChatBot-PipeLine/data/feedback/user_feedback.jsonl
+  metrics_output_dir: artifacts/metrics
+  processed_data_dir: ChatBot-PipeLine/data/processed
+  raw_intent_data: ChatBot-PipeLine/data/raw/Intent.json
 promotion_criteria:
-  min_macro_f1: 0.80
-  min_accuracy: 0.85
   max_latency_p95_ms: 100.0
-
+  min_accuracy: 0.85
+  min_macro_f1: 0.8
+prompt_management:
+  active_version: v1.0.0
+  fallback_instruction_file: ChatBot/ADKBot/instruction.txt
+  instructions_dir: ChatBot-PipeLine/configs/instructions

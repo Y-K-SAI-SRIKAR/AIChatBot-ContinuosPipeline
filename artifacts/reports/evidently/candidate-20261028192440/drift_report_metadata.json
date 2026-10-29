@@ -1,0 +1,29 @@
+{
+  "status": "success",
+  "timestamp": "2026-10-28T19:25:05.573233+00:00",
+  "reference_version": "v0.1.0-baseline",
+  "current_version": "candidate-20261028192440",
+  "model_version": "candidate-20261028192440",
+  "reference_samples": 98,
+  "current_samples": 2,
+  "columns_analyzed": [
+    "char_count",
+    "word_count",
+    "avg_word_length",
+    "intent"
+  ],
+  "drift_detected": false,
+  "drift_share": 0.5,
+  "drifted_columns_count": 0,
+  "retraining_recommended": true,
+  "retraining_reasons": [
+    "Drift share 0.50 >= threshold 0.50."
+  ],
+  "html_report_path": "D:\\MLO Project\\AIChatBot-ContinuosPipeline\\artifacts\\reports\\evidently\\candidate-20261028192440\\drift_report.html",
+  "json_report_path": "D:\\MLO Project\\AIChatBot-ContinuosPipeline\\artifacts\\reports\\evidently\\candidate-20261028192440\\drift_report.json",
+  "metrics_summary": {
+    "dataset_drift": false,
+    "drift_share": 0.5,
+    "number_of_drifted_columns": 0
+  }
+}

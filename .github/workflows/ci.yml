@@ -1,0 +1,125 @@
+name: Continuous Integration & Verification
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-validate:
+    name: Run Unit Tests & Contract Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+
+      - name: Run dataset preprocessing validation
+        run: |
+          python ChatBot-PipeLine/src/preprocessing/clean_data.py --input ChatBot-PipeLine/data/raw/Intent.json --output-dir ChatBot-PipeLine/data/processed
+
+      - name: Run test suite with offline ADK mode
+        env:
+          ADK_OFFLINE_MODE: "true"
+          DO_NOT_TRACK: "1"
+          EVIDENTLY_DISABLE_TELEMETRY: "1"
+          MLFLOW_ALLOW_FILE_STORE: "true"
+        run: |
+          python -m pytest ChatBot-PipeLine/tests/test_contracts.py \
+                           ChatBot-PipeLine/tests/test_feedback_store.py \
+                           ChatBot-PipeLine/tests/test_config_resolver.py \
+                           ChatBot-PipeLine/tests/test_drift_monitor.py \
+                           ChatBot-PipeLine/tests/test_retraining_pipeline.py \
+                           ChatBot-PipeLine/tests/test_monitoring.py \
+                           ChatBot-PipeLine/tests/test_api.py -v -p no:faker
+
+  docker-smoke-test:
+    name: Build Docker Image & Run Smoke Test
+    needs: test-and-validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          tags: aichatbot-api:test
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Container Smoke Test (Liveness, Readiness, Metrics)
+        run: |
+          # Start container in detached mode with offline ADK
+          docker run -d --name chatbot-smoke -p 6655:6655 \
+            -e ADK_OFFLINE_MODE=true \
+            -e METRICS_AUTH_TOKEN=test-token \
+            aichatbot-api:test
+
+          # Poll health endpoint until ready (up to 30 seconds)
+          for i in {1..15}; do
+            if curl -s http://localhost:6655/health | grep -q "AI ChatBot API Running"; then
+              echo "Chatbot API is healthy!"
+              break
+            fi
+            echo "Waiting for container startup... ($i/15)"
+            sleep 2
+          done
+
+          # Verify /health
+          HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:6655/health)
+          if [ "$HEALTH_STATUS" -ne 200 ]; then
+            echo "Healthcheck failed with HTTP $HEALTH_STATUS"
+            docker logs chatbot-smoke
+            exit 1
+          fi
+
+          # Verify /ready
+          READY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:6655/ready)
+          if [ "$READY_STATUS" -ne 200 ]; then
+            echo "Readiness check failed with HTTP $READY_STATUS"
+            docker logs chatbot-smoke
+            exit 1
+          fi
+
+          # Verify /metrics token protection
+          UNAUTH_METRICS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:6655/metrics)
+          if [ "$UNAUTH_METRICS" -ne 401 ]; then
+            echo "Expected 401 on unauthenticated /metrics, got $UNAUTH_METRICS"
+            exit 1
+          fi
+
+          # Verify /metrics with token
+          AUTH_METRICS=$(curl -s -H "Authorization: Bearer test-token" http://localhost:6655/metrics)
+          if ! echo "$AUTH_METRICS" | grep -q "http_requests_total"; then
+            echo "Expected Prometheus metrics missing in /metrics response"
+            exit 1
+          fi
+
+          echo "Container smoke tests passed successfully!"
+          docker stop chatbot-smoke && docker rm chatbot-smoke
+

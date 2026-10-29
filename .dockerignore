@@ -1,0 +1,39 @@
+# Version control & tooling
+.git
+.gitignore
+.github
+.pytest_cache
+.coverage
+htmlcov
+
+# Environment & Credentials (NEVER bake secrets into images)
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+token.json
+
+# Caches & temporary files
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
+
+# DVC and Local Data Caches
+.dvc/cache
+.dvc/tmp
+ChatBot-PipeLine/data/raw/*.dvc
+ChatBot-PipeLine/data/versioned/
+
+# Training runs & candidate artifacts (baseline v0.1.0-baseline is preserved)
+mlruns/
+mlruns.db
+.retraining.lock
+artifacts/models/candidate-*
+artifacts/reports/evidently/candidate-*
+

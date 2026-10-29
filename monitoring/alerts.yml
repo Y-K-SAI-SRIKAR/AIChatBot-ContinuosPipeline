@@ -1,0 +1,39 @@
+groups:
+  - name: aichatbot_alerts
+    rules:
+      - alert: HighHttpErrorRate
+        expr: rate(http_requests_total{status_code=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High HTTP 5xx error rate detected on AI ChatBot API"
+          description: "Over 5% of API requests resulted in HTTP 5xx errors over the last 5 minutes."
+
+      - alert: HighRequestLatency
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 2.0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API request latency"
+          description: "P95 request latency exceeds 2.0 seconds for more than 3 minutes."
+
+      - alert: FrequentADKFailures
+        expr: rate(chatbot_adk_failures_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Frequent Google ADK / Gemini agent execution failures"
+          description: "Chat turns are failing to invoke Google ADK runner at rate > 0.1/s."
+
+      - alert: RetrainingPipelineFailure
+        expr: increase(mloops_retraining_runs_total{status="failed"}[1h]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Continuous-learning retraining pipeline failed"
+          description: "At least one scheduled or triggered retraining pipeline run terminated with failure status."
+

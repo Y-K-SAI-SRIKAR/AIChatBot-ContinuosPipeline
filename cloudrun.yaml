@@ -1,0 +1,63 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: aichatbot-api
+  labels:
+    cloud.googleapis.com/location: us-central1
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "10"
+        run.googleapis.com/cpu-throttling: "false"
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      containers:
+      - image: gcr.io/PROJECT_ID/aichatbot-api:latest
+        ports:
+        - name: http1
+          containerPort: 6655
+        resources:
+          limits:
+            cpu: "2000m"
+            memory: "2Gi"
+        env:
+        - name: PORT
+          value: "6655"
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: gemini-api-key
+              key: latest
+        - name: METRICS_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: metrics-auth-token
+              key: latest
+        - name: ADK_OFFLINE_MODE
+          value: "false"
+        - name: ALLOWED_ORIGINS
+          value: "*"
+        - name: DO_NOT_TRACK
+          value: "1"
+        - name: EVIDENTLY_DISABLE_TELEMETRY
+          value: "1"
+        - name: MLFLOW_ALLOW_FILE_STORE
+          value: "true"
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 6655
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          failureThreshold: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 6655
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+

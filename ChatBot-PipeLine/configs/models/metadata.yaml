@@ -1,17 +1,44 @@
-active_version: "v0.1.0-baseline"
+active_version: candidate-20261029051221
 models:
-  v0.1.0-baseline:
-    model_version: "v0.1.0-baseline"
-    model_name: "bert-intent-classifier"
-    artifact_location: "artifacts/models/baseline"
-    dataset_version: "ChatBot-PipeLine/data/raw/Intent.json"
-    dvc_revision: "baseline-dvc-v1"
-    num_classes: 22
-    promotion_status: "production"
-    created_at: "2026-10-27T00:00:00Z"
+  candidate-20261028192611:
+    artifact_location: artifacts/models/candidate-20261028192611
+    created_at: '2026-10-28T19:27:09.486289+00:00'
+    dataset_version: ChatBot-PipeLine/data/versioned/Intent_candidate-20261028192611.json
+    dvc_revision: uncommitted
     evaluation_metrics:
-      macro_f1: 0.88
+      accuracy: 0.6364
+      macro_f1: 0.5712
+    model_name: bert-intent-classifier
+    model_version: candidate-20261028192611
+    notes: Promoted candidate model candidate-20261028192611 via Continuous Learning
+      Pipeline.
+    num_classes: 22
+    promotion_status: production
+  candidate-20261029051221:
+    artifact_location: artifacts/models/candidate-20261029051221
+    created_at: '2026-10-29T05:13:11.812520+00:00'
+    dataset_version: ChatBot-PipeLine/data/versioned/Intent_candidate-20261029051221.json
+    dvc_revision: uncommitted
+    evaluation_metrics:
+      accuracy: 0.6364
+      macro_f1: 0.5712
+    model_name: bert-intent-classifier
+    model_version: candidate-20261029051221
+    notes: Promoted candidate model candidate-20261029051221 via Continuous Learning
+      Pipeline.
+    num_classes: 22
+    promotion_status: production
+  v0.1.0-baseline:
+    artifact_location: artifacts/models/baseline
+    created_at: '2026-10-27T00:00:00Z'
+    dataset_version: ChatBot-PipeLine/data/raw/Intent.json
+    dvc_revision: baseline-dvc-v1
+    evaluation_metrics:
       accuracy: 0.91
       latency_p95_ms: 22.5
-    notes: "Baseline BERT sequence classifier trained on Intent.json (22 classes)"
-
+      macro_f1: 0.88
+    model_name: bert-intent-classifier
+    model_version: v0.1.0-baseline
+    notes: Baseline BERT sequence classifier trained on Intent.json (22 classes)
+    num_classes: 22
+    promotion_status: production

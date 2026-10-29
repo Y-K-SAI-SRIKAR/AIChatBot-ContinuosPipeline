@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alerts.yml"
+
+scrape_configs:
+  - job_name: "aichatbot-service"
+    metrics_path: "/metrics"
+    scheme: "http"
+    static_configs:
+      - targets: ["chatbot:6655"]
+    # Optional bearer token if METRICS_AUTH_TOKEN is configured in container
+    # bearer_token: "secret-token-value"
+
