@@ -69,7 +69,7 @@ EXPOSE 6655
 # Healthcheck distinguishes liveness from a hung process and respects Render's
 # dynamically assigned PORT.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD-SHELL curl -f "http://localhost:${PORT:-6655}/health" || exit 1
+    CMD curl -f "http://localhost:${PORT:-6655}/health" || exit 1
 
 # Graceful startup entrypoint
 CMD ["/app/scripts/render-start.sh"]
