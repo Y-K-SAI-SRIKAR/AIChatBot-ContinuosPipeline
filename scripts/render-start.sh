@@ -2,7 +2,7 @@
 set -eu
 
 MODEL_VERSION="${ACTIVE_MODEL_VERSION:-v0.1.0-baseline}"
-MODEL_ROOT="${MODEL_ARTIFACTS_DIR:-/app/artifacts/models}"
+MODEL_ROOT="${MODEL_ARTIFACTS_DIR:-/var/data/models}"
 PERSISTED_MODEL="${MODEL_ROOT}/${MODEL_VERSION}"
 BUNDLED_MODEL="/app/artifacts/models/${MODEL_VERSION}"
 
@@ -43,5 +43,7 @@ if ! model_is_complete "${PERSISTED_MODEL}"; then
     echo "ERROR: Model is incomplete: ${PERSISTED_MODEL}" >&2
     exit 1
 fi
+
+export MODEL_ARTIFACTS_DIR="${MODEL_ROOT}"
 
 exec python -m uvicorn ADKBot.api:app --host 0.0.0.0 --port "${PORT:-6655}"
