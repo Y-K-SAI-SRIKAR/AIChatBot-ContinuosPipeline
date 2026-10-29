@@ -61,18 +61,32 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="AI ChatBot API", version="1.0.0")
 
-# Allowed Origins configuration for web client integrations
+# Allowed Origins configuration
 raw_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
-allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
-if not allowed_origins and os.getenv("ENVIRONMENT", "development").lower() == "development":
-    # Keep local Vite/React development convenient without exposing a deployed
-    # API to arbitrary browser origins.  Production must set ALLOWED_ORIGINS.
-    allowed_origins = ["http://localhost:3000", "http://localhost:5173"]
+
+allowed_origins = [
+    origin.strip().rstrip("/")
+    for origin in raw_origins.split(",")
+    if origin.strip()
+]
+
+# Local development fallback
+if (
+    not allowed_origins
+    and os.getenv("ENVIRONMENT", "development").lower() == "development"
+):
+    allowed_origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+    ]
+
+print(f"CORS allowed origins: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=bool(allowed_origins),
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
