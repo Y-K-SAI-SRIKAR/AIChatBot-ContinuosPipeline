@@ -53,8 +53,7 @@ RUN mkdir -p /app/ChatBot-PipeLine/data/feedback \
     chmod +x /app/scripts/render-start.sh && \
     chown -R appuser:appgroup /app
 
-# Switch to non-root user
-USER appuser
+USER root
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1 \
