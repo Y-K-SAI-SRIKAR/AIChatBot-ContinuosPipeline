@@ -148,8 +148,18 @@ class ModelConfigResolver:
     def __init__(self, repo_root: Optional[Path] = None):
         self.repo_root = repo_root or find_repo_root()
         self.configs_dir = self.repo_root / "ChatBot-PipeLine" / "configs"
-        self.artifacts_dir = self.repo_root / "artifacts" / "models"
-        self.fallback_dir = self.artifacts_dir / "baseline"
+        # Serving deployments may mount model artifacts on durable storage.  A
+        # local development run continues to use the repository artifacts.
+        configured_artifacts = os.getenv("MODEL_ARTIFACTS_DIR", "").strip()
+        self.artifacts_dir = (
+            Path(configured_artifacts).expanduser().resolve()
+            if configured_artifacts
+            else self.repo_root / "artifacts" / "models"
+        )
+        # The shipped baseline checkpoint is versioned; the old unversioned
+        # ``artifacts/models/baseline`` placeholder intentionally contains no
+        # model files and must not be used for a readiness fallback.
+        self.fallback_dir = self.artifacts_dir / self.DEFAULT_MODEL_VERSION
 
     def _read_config_active_version(self) -> Optional[str]:
         cfg_file = self.configs_dir / "config.yaml"

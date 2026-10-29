@@ -62,13 +62,17 @@ from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI(title="AI ChatBot API", version="1.0.0")
 
 # Allowed Origins configuration for web client integrations
-raw_origins = os.getenv("ALLOWED_ORIGINS", "*").strip()
-allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()] or ["*"]
+raw_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
+allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+if not allowed_origins and os.getenv("ENVIRONMENT", "development").lower() == "development":
+    # Keep local Vite/React development convenient without exposing a deployed
+    # API to arbitrary browser origins.  Production must set ALLOWED_ORIGINS.
+    allowed_origins = ["http://localhost:3000", "http://localhost:5173"]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=True,
+    allow_credentials=bool(allowed_origins),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -89,6 +93,7 @@ feedback_store = FeedbackStore(storage_path=Path(feedback_storage_override) if f
 _recent_turns: Dict[str, Dict[str, Any]] = {}
 
 # Cached intent predictor instance
+_active_model_version: Optional[str] = None
 _predictor_instance = None
 _predictor_model_path = None
 
@@ -227,7 +232,7 @@ def reload_configuration(payload: Optional[Dict[str, str]] = None):
     Controlled reload mechanism for the active model and prompt configurations.
     Enables zero-downtime hot reloading of models and instructions upon pipeline promotion.
     """
-    global _predictor_instance, _predictor_model_path, runner
+    global _predictor_instance, _predictor_model_path, runner, _active_model_version
     payload = payload or {}
     model_override = payload.get("model_version")
     prompt_override = payload.get("prompt_version")
@@ -240,6 +245,7 @@ def reload_configuration(payload: Optional[Dict[str, str]] = None):
     _predictor_instance = None
     _predictor_model_path = None
     resolved_model = resolve_active_model_config(version_override=model_override)
+    _active_model_version = resolved_model.model_version
     _get_intent_predictor(resolved_model.artifact_location)
 
     # Update Prometheus active version gauge
@@ -266,8 +272,8 @@ async def chat(request: ChatRequest):
     CHATBOT_REQUESTS_TOTAL.inc()
 
     # Resolve active model & prompt configurations
-    active_prompt = resolve_active_prompt_config()
-    active_model = resolve_active_model_config()
+    active_prompt = resolve_active_prompt_config(version_override=agent_manager.active_prompt_version)
+    active_model = resolve_active_model_config(version_override=_active_model_version)
 
     # Update Prometheus gauge
     update_active_versions_gauge(active_model.model_version, active_prompt.prompt_version)
@@ -275,18 +281,20 @@ async def chat(request: ChatRequest):
     # Predict intent via fine-tuned BERT classifier
     predicted_intent = None
     intent_confidence = None
-    predictor = _get_intent_predictor(active_model.artifact_location)
-    if predictor:
-        try:
-            pred_res = predictor.predict(request.message)
-            predicted_intent = pred_res.intent
-            intent_confidence = round(pred_res.confidence, 4)
-            INTENT_PREDICTIONS_TOTAL.labels(intent=predicted_intent or "unknown").inc()
-            if intent_confidence is not None:
-                INTENT_PREDICTION_CONFIDENCE.observe(intent_confidence)
-        except Exception:
-            predicted_intent = None
-            intent_confidence = None
+    bert_enabled = os.getenv("BERT_CLASSIFIER_ENABLED", "true").strip().lower() not in {"false", "0", "no"}
+    if bert_enabled:
+        predictor = _get_intent_predictor(active_model.artifact_location)
+        if predictor:
+            try:
+                pred_res = predictor.predict(request.message)
+                predicted_intent = pred_res.intent
+                intent_confidence = round(pred_res.confidence, 4)
+                INTENT_PREDICTIONS_TOTAL.labels(intent=predicted_intent or "unknown").inc()
+                if intent_confidence is not None:
+                    INTENT_PREDICTION_CONFIDENCE.observe(intent_confidence)
+            except Exception:
+                predicted_intent = None
+                intent_confidence = None
 
     # Check for offline test mode (prevents sandbox network hanging during automated test runs)
     if os.getenv("ADK_OFFLINE_MODE", "false").lower() in {"true", "1", "yes"}:
@@ -434,7 +442,7 @@ def get_feedback_stats():
 @app.get("/api/v1/metadata/prompt", response_model=PromptMetadata)
 def get_active_prompt_metadata():
     """Retrieve metadata for currently active system instructions."""
-    resolved = resolve_active_prompt_config()
+    resolved = resolve_active_prompt_config(version_override=agent_manager.active_prompt_version)
     return resolved.metadata
 
 
@@ -442,5 +450,5 @@ def get_active_prompt_metadata():
 @app.get("/api/v1/metadata/model", response_model=ModelMetadata)
 def get_active_model_metadata():
     """Retrieve metadata for currently active intent classification model."""
-    resolved = resolve_active_model_config()
+    resolved = resolve_active_model_config(version_override=_active_model_version)
     return resolved.metadata

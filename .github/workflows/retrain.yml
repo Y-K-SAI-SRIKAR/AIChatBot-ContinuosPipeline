@@ -12,7 +12,7 @@ on:
         default: '10'
         type: string
       force_promote:
-        description: 'Force candidate promotion (bypass automated metric improvement check)'
+        description: 'Run despite the feedback-count threshold (quality gates still apply)'
         required: false
         default: false
         type: boolean
@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   retrain-and-evaluate:
-    name: Execute 14-Stage Retraining Pipeline
+    name: Train and Evaluate Candidate (No Serving Promotion)
     runs-on: ubuntu-latest
 
     steps:
@@ -44,6 +44,18 @@ jobs:
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
 
+      - name: Configure DVC remote and materialize tracked inputs
+        env:
+          DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+        run: |
+          test -n "$DAGSHUB_USERNAME"
+          test -n "$DAGSHUB_TOKEN"
+          dvc remote modify --local dagshub auth basic
+          dvc remote modify --local dagshub user "$DAGSHUB_USERNAME"
+          dvc remote modify --local dagshub password "$DAGSHUB_TOKEN"
+          dvc pull ChatBot-PipeLine/data/raw/Intent.json.dvc artifacts/models/v0.1.0-baseline
+
       - name: Run Retraining Pipeline
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -52,6 +64,10 @@ jobs:
           DO_NOT_TRACK: "1"
           EVIDENTLY_DISABLE_TELEMETRY: "1"
           MLFLOW_ALLOW_FILE_STORE: "true"
+          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+          MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+          MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+          DVC_PUSH_ON_RETRAIN: "true"
         run: |
           FORCE_ARG=""
           if [ "${{ inputs.force_promote }}" = "true" ]; then
@@ -64,6 +80,7 @@ jobs:
 
           echo "Executing continuous retraining pipeline (min_feedback=$MIN_FB, force_promote=${{ inputs.force_promote }})..."
           python ChatBot-PipeLine/src/pipeline/retraining_pipeline.py \
+            --dry-run \
             --min-feedback "$MIN_FB" \
             $FORCE_ARG
 
@@ -75,10 +92,6 @@ jobs:
           path: |
             artifacts/reports/evidently/
             artifacts/metrics/
+            artifacts/models/candidate-*/
           retention-days: 14
-
-      - name: Publish Promoted Model Pointer
-        if: success() && github.ref == 'refs/heads/main'
-        run: |
-          echo "Model evaluation and promotion gates passed. Active model and instruction metadata updated."
 

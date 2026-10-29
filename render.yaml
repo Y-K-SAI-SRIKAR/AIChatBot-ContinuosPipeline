@@ -8,14 +8,14 @@ services:
     healthCheckPath: /health
     autoDeploy: false
     envVars:
-      - key: PORT
-        value: 6655
       - key: GEMINI_API_KEY
         sync: false # Set securely in Render dashboard
       - key: METRICS_AUTH_TOKEN
         sync: false # Set securely in Render dashboard
       - key: ADK_OFFLINE_MODE
         value: "false"
+      - key: ENVIRONMENT
+        value: production
       - key: DO_NOT_TRACK
         value: "1"
       - key: EVIDENTLY_DISABLE_TELEMETRY
@@ -23,11 +23,17 @@ services:
       - key: MLFLOW_ALLOW_FILE_STORE
         value: "true"
       - key: ALLOWED_ORIGINS
-        value: "*"
+        sync: false # Set to the exact Static Site origin after creation
       - key: FEEDBACK_STORAGE_PATH
         value: /var/data/feedback/user_feedback.jsonl
+      - key: MODEL_ARTIFACTS_DIR
+        value: /var/data/models
+      - key: DAGSHUB_USERNAME
+        sync: false
+      - key: DAGSHUB_TOKEN
+        sync: false
     disk:
-      name: feedback-storage
-      mountPath: /var/data/feedback
+      name: chatbot-state
+      mountPath: /var/data
       sizeGB: 1
 

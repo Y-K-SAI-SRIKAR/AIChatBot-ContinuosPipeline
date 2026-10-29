@@ -55,6 +55,7 @@ def run_smoke_test(base_url: str = "http://127.0.0.1:6655"):
         model_meta = resp_model_meta.json()
         assert model_meta["model_version"] == "v0.1.0-baseline"
         results["model_metadata"] = model_meta
+        assert Path(model_meta["artifact_location"]).name == "v0.1.0-baseline"
         print(f"[PASS] 3. /metadata/model resolved baseline artifact: {model_meta['artifact_location']}")
 
         # 4. Prompt metadata

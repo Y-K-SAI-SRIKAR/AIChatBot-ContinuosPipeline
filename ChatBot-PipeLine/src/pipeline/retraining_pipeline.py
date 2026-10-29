@@ -532,8 +532,14 @@ class ContinuousLearningPipeline:
         try:
             import mlflow
 
-            tracking_uri = self.pipeline_dir / "mlruns"
-            mlflow.set_tracking_uri(str(tracking_uri))
+            # A configured remote (for example DagsHub MLflow) takes
+            # precedence.  Local file storage remains the explicit fallback
+            # for offline development only.
+            tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "").strip()
+            if tracking_uri:
+                mlflow.set_tracking_uri(tracking_uri)
+            else:
+                mlflow.set_tracking_uri(str(self.pipeline_dir / "mlruns"))
             mlflow.set_experiment("aic-chatbot-continuous-learning")
 
             with mlflow.start_run(run_name=f"retrain-{candidate_version}") as run:
@@ -564,14 +570,29 @@ class ContinuousLearningPipeline:
         # DVC Versioning attempt (best effort)
         try:
             import subprocess
-            subprocess.run(
+            dvc_add = subprocess.run(
                 ["dvc", "add", str(candidate_model_dir)],
                 cwd=str(self.repo_root),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 check=False
             )
-            logger.info(f"DVC tracking updated for {candidate_model_dir}")
+            if dvc_add.returncode != 0:
+                logger.warning("DVC did not add candidate artifact %s (exit %s).", candidate_model_dir, dvc_add.returncode)
+            elif os.getenv("DVC_PUSH_ON_RETRAIN", "false").lower() in {"1", "true", "yes"}:
+                dvc_push = subprocess.run(
+                    ["dvc", "push"],
+                    cwd=str(self.repo_root),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
+                if dvc_push.returncode != 0:
+                    logger.warning("DVC candidate push failed (exit %s).", dvc_push.returncode)
+                else:
+                    logger.info("DVC candidate artifact pushed to configured remote.")
+            else:
+                logger.info("DVC tracking updated for %s; remote push not requested.", candidate_model_dir)
         except Exception:
             pass
 
@@ -589,9 +610,16 @@ class ContinuousLearningPipeline:
         logger.info(f"Stage 10: Applying production quality gate promotion rules to '{candidate_version}'...")
         rejection_reasons: List[str] = []
 
+        # A manually requested run may bypass the *feedback-count scheduling*
+        # threshold (see ``run``), but it must never bypass artifact validation,
+        # evaluation thresholds, or the non-regression check.  Keeping the gate
+        # unconditional prevents an invalid candidate from becoming active by
+        # passing a CLI flag or a workflow-dispatch input.
         if force_promote:
-            logger.warning(f"Manual promotion flag set. Bypassing automatic thresholds for '{candidate_version}'.")
-            return True, ["Promoted via explicit manual override."]
+            logger.info(
+                "Manual retraining requested for '%s'; applying the full quality gate.",
+                candidate_version,
+            )
 
         # 1. Missing artifact check
         required_files = ["model.safetensors", "config.json", "label_mapping.json", "tokenizer.json"]
@@ -731,9 +759,11 @@ class ContinuousLearningPipeline:
     ) -> bool:
         logger.info("Stage 13: Notifying application of active versions via supported reload mechanism...")
         success = False
+        service_rejected_reload = False
 
         # 1. Notify running API service via POST /reload if running
         try:
+            import urllib.error
             import urllib.request
             req = urllib.request.Request(
                 "http://localhost:6655/reload",
@@ -748,7 +778,15 @@ class ContinuousLearningPipeline:
                 if resp.status == 200:
                     success = True
                     logger.info("Running API service successfully reloaded via POST /reload.")
+                else:
+                    service_rejected_reload = True
+        except urllib.error.HTTPError:
+            service_rejected_reload = True
         except Exception:
+            # An offline service is normal for a scheduled pipeline: the next
+            # process start resolves the atomically published pointers.  An
+            # in-process or responding service failure, below, is an actual
+            # activation failure and triggers restoration.
             pass
 
         # 2. In-process reload if agent module is active in current interpreter
@@ -761,11 +799,41 @@ class ContinuousLearningPipeline:
             except Exception as e:
                 logger.warning(f"In-process ADK reload notification skipped: {e}")
 
+        if service_rejected_reload:
+            return False
+
+        # If no process was available, publication remains valid and startup
+        # performs the activation from the version pointers.
+        if not success:
+            logger.info("No running API reload target; activation deferred until service startup.")
+
         # Update Prometheus active version gauge & counters
         _update_version_gauge(candidate_version, prompt_version)
         _record_metric_promotion()
 
-        return success
+        return True
+
+    def _restore_active_version_pointers(self, model_version: str, prompt_version: str) -> None:
+        """Restore registry/config pointers after an activation notification fails."""
+        if self.config_path.exists():
+            with open(self.config_path, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+            cfg.setdefault("model_management", {})["active_version"] = model_version
+            cfg.setdefault("prompt_management", {})["active_version"] = prompt_version
+            tmp_config = self.config_path.with_suffix(".tmp")
+            with open(tmp_config, "w", encoding="utf-8") as f:
+                yaml.dump(cfg, f, default_flow_style=False)
+            tmp_config.replace(self.config_path)
+
+        models_meta_file = self.pipeline_dir / "configs" / "models" / "metadata.yaml"
+        if models_meta_file.exists():
+            with open(models_meta_file, "r", encoding="utf-8") as f:
+                metadata = yaml.safe_load(f) or {}
+            metadata["active_version"] = model_version
+            tmp_metadata = models_meta_file.with_suffix(".tmp")
+            with open(tmp_metadata, "w", encoding="utf-8") as f:
+                yaml.dump(metadata, f, default_flow_style=False)
+            tmp_metadata.replace(models_meta_file)
 
     # ── Stage 14: Record Failure / Rejection ──────────────────────────────────
     def stage_14_handle_failure_or_rejection(
@@ -899,13 +967,30 @@ class ContinuousLearningPipeline:
                 pipeline_audit["stages_succeeded"].append(11)
 
                 # Stage 12: Atomic active-version update
+                previous_model = resolve_active_model_config().model_version
+                previous_prompt = resolve_active_prompt_config().prompt_version
                 pipeline_audit["stages_executed"].append(12)
                 self.stage_12_atomic_update_active_version(cand_version, prompt_version, metrics, mlflow_id)
                 pipeline_audit["stages_succeeded"].append(12)
 
                 # Stage 13: Notify application reload
                 pipeline_audit["stages_executed"].append(13)
-                self.stage_13_notify_application(cand_version, prompt_version)
+                activated = self.stage_13_notify_application(cand_version, prompt_version)
+                if not activated:
+                    # Never leave an unacknowledged candidate as the active pointer.
+                    self._restore_active_version_pointers(previous_model, previous_prompt)
+                    reasons = ["Activation notification failed; restored previous active versions."]
+                    pipeline_audit["stages_executed"].append(14)
+                    self.stage_14_handle_failure_or_rejection(cand_version, reasons)
+                    pipeline_audit["stages_succeeded"].append(14)
+                    pipeline_audit.update({
+                        "status": "rejected",
+                        "candidate_version": cand_version,
+                        "metrics": metrics,
+                        "reasons": reasons,
+                    })
+                    _record_metric_run("activation_failed")
+                    return pipeline_audit
                 pipeline_audit["stages_succeeded"].append(13)
 
                 pipeline_audit["status"] = "promoted"
@@ -963,7 +1048,11 @@ class ContinuousLearningPipeline:
 def main():
     parser = argparse.ArgumentParser(description="Continuous-Learning Retraining Pipeline")
     parser.add_argument("--dry-run", action="store_true", help="Execute evaluation without promoting candidate")
-    parser.add_argument("--force-promote", action="store_true", help="Force promotion bypassing quality gates")
+    parser.add_argument(
+        "--force-promote",
+        action="store_true",
+        help="Run despite the feedback-count threshold; quality gates are never bypassed",
+    )
     parser.add_argument("--rollback", type=str, default=None, help="Roll back active model to specified version")
     parser.add_argument("--min-feedback", type=int, default=3, help="Minimum feedback count required to retrain")
     parser.add_argument("--min-f1", type=float, default=0.80, help="Minimum Macro F1 threshold")

@@ -9,7 +9,7 @@ mlflow:
 model_management:
   active_version: v0.1.0-baseline
   base_architecture: distilbert-base-uncased
-  fallback_model_dir: artifacts/models/baseline
+  fallback_model_dir: artifacts/models/v0.1.0-baseline
   models_dir: artifacts/models
   num_labels: 22
 paths:

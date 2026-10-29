@@ -183,6 +183,21 @@ class TestRetrainingPipeline:
         assert promoted is False
         assert any("below minimum threshold" in r or "regression" in r for r in reasons)
 
+    def test_force_flag_cannot_bypass_quality_gate(self, mock_pipeline_env):
+        pipeline = ContinuousLearningPipeline(repo_root=mock_pipeline_env)
+        candidate_dir = mock_pipeline_env / "artifacts" / "models" / "cand-invalid"
+        candidate_dir.mkdir(parents=True, exist_ok=True)
+
+        promoted, reasons = pipeline.stage_10_apply_promotion_rules(
+            candidate_version="cand-invalid",
+            candidate_metrics={"macro_f1": 0.01, "accuracy": 0.01},
+            candidate_model_dir=candidate_dir,
+            drift_result={},
+            force_promote=True,
+        )
+        assert promoted is False
+        assert reasons
+
     def test_successful_promotion_and_atomic_update(self, mock_pipeline_env):
         pipeline = ContinuousLearningPipeline(
             repo_root=mock_pipeline_env,
@@ -221,6 +236,14 @@ class TestRetrainingPipeline:
         success = pipeline.rollback(target_model_version="v0.1.0-baseline", target_prompt_version="v1.0.0")
         assert success is True
 
+        with open(mock_pipeline_env / "ChatBot-PipeLine" / "configs" / "config.yaml", "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        assert cfg["model_management"]["active_version"] == "v0.1.0-baseline"
+        assert cfg["prompt_management"]["active_version"] == "v1.0.0"
+
+    def test_activation_failure_restores_previous_pointers(self, mock_pipeline_env):
+        pipeline = ContinuousLearningPipeline(repo_root=mock_pipeline_env)
+        pipeline._restore_active_version_pointers("v0.1.0-baseline", "v1.0.0")
         with open(mock_pipeline_env / "ChatBot-PipeLine" / "configs" / "config.yaml", "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
         assert cfg["model_management"]["active_version"] == "v0.1.0-baseline"

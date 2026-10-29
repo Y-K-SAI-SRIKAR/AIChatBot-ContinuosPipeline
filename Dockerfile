@@ -40,6 +40,9 @@ COPY ChatBot-PipeLine/ /app/ChatBot-PipeLine/
 COPY artifacts/ /app/artifacts/
 COPY monitoring/ /app/monitoring/
 COPY pytest.ini /app/pytest.ini
+COPY .dvc/ /app/.dvc/
+COPY dvc.yaml dvc.lock params.yaml /app/
+COPY scripts/render-start.sh /app/scripts/render-start.sh
 
 # Ensure runtime directories exist with correct non-root permissions
 RUN mkdir -p /app/ChatBot-PipeLine/data/feedback \
@@ -47,6 +50,7 @@ RUN mkdir -p /app/ChatBot-PipeLine/data/feedback \
              /app/artifacts/models \
              /app/artifacts/reports/evidently \
              /app/artifacts/metrics && \
+    chmod +x /app/scripts/render-start.sh && \
     chown -R appuser:appgroup /app
 
 # Switch to non-root user
@@ -62,10 +66,11 @@ ENV PYTHONUNBUFFERED=1 \
 
 EXPOSE 6655
 
-# Healthcheck distinguishing liveness from hung process
+# Healthcheck distinguishes liveness from a hung process and respects Render's
+# dynamically assigned PORT.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:6655/health || exit 1
+    CMD-SHELL curl -f "http://localhost:${PORT:-6655}/health" || exit 1
 
 # Graceful startup entrypoint
-CMD ["python", "-m", "uvicorn", "ADKBot.api:app", "--host", "0.0.0.0", "--port", "6655"]
+CMD ["/app/scripts/render-start.sh"]
 
